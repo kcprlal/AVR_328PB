@@ -3,14 +3,13 @@
 void display(unsigned char* pointarr[]){
 	unsigned char wyswietlacz[4]={0b0111,0b1011,0b1101,0b1110};
 	volatile unsigned int i,wait1,wait2;
-	for(wait1=0;wait1<1000;++wait1){
-		for(wait2=0;wait2<100;++wait2){
-			for(i=0;i<4;++i){
-					PORTB=wyswietlacz[i];
-					PORTD=~(*pointarr[i]);
-					PORTD=0b11111111;
-				}
+	for(wait1=0;wait1<105;++wait1){
+		for(i=0;i<4;++i){
+			for(unsigned int wait2=0;wait2<1000;++wait2){
+				PORTB=wyswietlacz[i];
+				PORTD=~(*pointarr[i]);
 			}
+		}
 	}
 }
 
