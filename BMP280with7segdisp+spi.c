@@ -147,7 +147,7 @@ int main(void) {
     DDRC = 0xff;
     DDRB &= ~(1 << 7);
     PORTB |= (1 << 7);
-    PORTB &= (1 << 2);
+    PORTB &= ~(1 << 2);
     volatile uint32_t adc_T = 0;
     volatile uint32_t adc_P = 0;
     while (1) {
