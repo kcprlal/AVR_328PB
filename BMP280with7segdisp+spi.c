@@ -135,7 +135,7 @@ void bmp280_readcalibs(void){
 	dig_P9 = bmp280_readreg(0x9e) | (bmp280_readreg(0x9f) << 8);
 }
 
-read_pressure_and_temperature(volatile int32_t* pressure,volatile int32_t* temperature) {
+void read_pressure_and_temperature(volatile int32_t* pressure,volatile int32_t* temperature) {
 	uint8_t msb, lsb, xlsb;
 
 	msb = bmp280_readreg(BMP280_TEMP_MSB);
