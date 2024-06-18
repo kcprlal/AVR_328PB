@@ -82,22 +82,6 @@ static uint32_t bmp280_press64_compensate(int32_t adc_P){
 	return (uint32_t)p/25600;
 }
 
-void bmp280_readcalibs(void){
-	dig_T1 = bmp280_readreg(0x88) | (bmp280_readreg(0x89) << 8);
-	dig_T2 = bmp280_readreg(0x8a) | (bmp280_readreg(0x8b) << 8);
-	dig_T3 = bmp280_readreg(0x8c) | (bmp280_readreg(0x8d) << 8);
-
-	dig_P1 = bmp280_readreg(0x8e) | (bmp280_readreg(0x8f) << 8);
-	dig_P2 = bmp280_readreg(0x90) | (bmp280_readreg(0x91) << 8);
-	dig_P3 = bmp280_readreg(0x92) | (bmp280_readreg(0x93) << 8);
-	dig_P4 = bmp280_readreg(0x94) | (bmp280_readreg(0x95) << 8);
-	dig_P5 = bmp280_readreg(0x96) | (bmp280_readreg(0x97) << 8);
-	dig_P6 = bmp280_readreg(0x98) | (bmp280_readreg(0x99) << 8);
-	dig_P7 = bmp280_readreg(0x9a) | (bmp280_readreg(0x9b) << 8);
-	dig_P8 = bmp280_readreg(0x9c) | (bmp280_readreg(0x9d) << 8);
-	dig_P9 = bmp280_readreg(0x9e) | (bmp280_readreg(0x9f) << 8);
-}
-
 uint8_t SPI_transfer(uint8_t data) {
 	SPDR0 = data;
 	while (!(SPSR0 & (1 << SPIF)));
@@ -132,19 +116,33 @@ void SPI_Init(void) {
 
 void bmp280_init(void) {
     bmp280_writereg(0xF4, 0b10110111); 
-    _delay_ms(100); // Małe opóźnienie dla stabilizacji
+    _delay_ms(100); 
 }
 
-void read_pressure_and_temperature(uint32_t* pressure, uint32_t* temperature) {
+void bmp280_readcalibs(void){
+	dig_T1 = bmp280_readreg(0x88) | (bmp280_readreg(0x89) << 8);
+	dig_T2 = bmp280_readreg(0x8a) | (bmp280_readreg(0x8b) << 8);
+	dig_T3 = bmp280_readreg(0x8c) | (bmp280_readreg(0x8d) << 8);
+
+	dig_P1 = bmp280_readreg(0x8e) | (bmp280_readreg(0x8f) << 8);
+	dig_P2 = bmp280_readreg(0x90) | (bmp280_readreg(0x91) << 8);
+	dig_P3 = bmp280_readreg(0x92) | (bmp280_readreg(0x93) << 8);
+	dig_P4 = bmp280_readreg(0x94) | (bmp280_readreg(0x95) << 8);
+	dig_P5 = bmp280_readreg(0x96) | (bmp280_readreg(0x97) << 8);
+	dig_P6 = bmp280_readreg(0x98) | (bmp280_readreg(0x99) << 8);
+	dig_P7 = bmp280_readreg(0x9a) | (bmp280_readreg(0x9b) << 8);
+	dig_P8 = bmp280_readreg(0x9c) | (bmp280_readreg(0x9d) << 8);
+	dig_P9 = bmp280_readreg(0x9e) | (bmp280_readreg(0x9f) << 8);
+}
+
+read_pressure_and_temperature(volatile int32_t* pressure,volatile int32_t* temperature) {
 	uint8_t msb, lsb, xlsb;
 
-	// Odczyt temperatury
 	msb = bmp280_readreg(BMP280_TEMP_MSB);
 	lsb = bmp280_readreg(BMP280_TEMP_LSB);
 	xlsb = bmp280_readreg(BMP280_TEMP_XLSB);
 	*temperature = (msb << 12) | (lsb << 4) | (xlsb >> 4);
 
-	// Odczyt ciśnienia
 	msb = bmp280_readreg(BMP280_PRESS_MSB);
 	lsb = bmp280_readreg(BMP280_PRESS_LSB);
 	xlsb = bmp280_readreg(BMP280_PRESS_XLSB);
@@ -158,13 +156,13 @@ int main(void) {
 	SPI_Init();
 	bmp280_init();
 	bmp280_readcalibs();
-	DDRD = 0xff; // wyjscie wyswietlacza
+	DDRD = 0xff;
 	DDRC = 0xff;
 	DDRB &= ~(1 << 7);
 	PORTB |= (1 << 7);
 	PORTB &= ~(1 << 2);
-	volatile uint32_t adc_T = 0;
-	volatile uint32_t adc_P = 0;
+	volatile int32_t adc_T = 0;
+	volatile int32_t adc_P = 0;
 	while (1) {
 		read_pressure_and_temperature(&adc_P, &adc_T);
 		volatile uint32_t press = bmp280_press64_compensate(adc_P);
