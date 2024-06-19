@@ -138,7 +138,9 @@ void bmp280_readreg(uint8_t reg, void *reg_data, uint8_t len){
 void bmp280_writereg(uint8_t reg, uint8_t value) {
 	PORTB &= ~(1 << SS0);
 	SPI_transfer(reg & ~0x80);
+ _dealy_ms(10);
 	SPI_transfer(value);
+ _dealy_ms(10);
 	PORTB |= (1 << SS0);
 }
 
@@ -188,7 +190,9 @@ void read_pressure_and_temperature(volatile int32_t* pressure,volatile int32_t* 
 }
 
 int main(void) {
+//array with 7 segment numbers
 	unsigned char arr[11] = {0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x70, 0x7F, 0x7B, 0};
+//array of arrays of 7 segment numbers
 	unsigned char* pointarr[4] = {arr, arr, arr, arr};
 	CLKPR |=(1<<CLKPS0);
 	DDRD = 0xff;
