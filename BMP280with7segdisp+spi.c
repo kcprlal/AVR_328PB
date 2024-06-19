@@ -31,6 +31,7 @@ void display(unsigned char* pointarr[]){
 			for (wait2 = 0; wait2 < 1000; ++wait2) {
 				PORTC = disp[i];
 				PORTD = ~(*pointarr[i]);
+				if(PINE & (1<<1) && i == 2) PORTD &= ~(1<<7); 
 			}
 		}
 	}
@@ -78,8 +79,11 @@ void change(unsigned char* pointarr[], unsigned char arr[], volatile uint32_t pr
 	 }
 }
 
-int32_t bmp280_temp32_compensate(int32_t adc_T){
+int32_t bmp280_temp32_compensate(){
 	int32_t var1, var2, T;
+	uint8_t tempr[3];
+	bmp280_readreg(BMP280_TEMP_MSB, tempr,3);
+	int32_t adc_T = (int32_t) ((((int32_t) (tempr[0])) << 12) | (((int32_t) (tempr[1])) << 4) | (((int32_t) (tempr[2])) >> 4));
 	var1 = ((((adc_T >> 3) - ((int32_t)dig_T1 << 1))) * ((int32_t)dig_T2)) >> 11;
 	var2 = (((((adc_T >> 4) - ((int32_t)dig_T1)) * ((adc_T >> 4) - ((int32_t)dig_T1))) >> 12) * ((int32_t)dig_T3)) >> 14;
 	t_fine = var1 + var2;
@@ -87,8 +91,11 @@ int32_t bmp280_temp32_compensate(int32_t adc_T){
 	return T;
 }
 
-uint32_t bmp280_press64_compensate(int32_t adc_P){
+uint32_t bmp280_press64_compensate(){
 	int64_t var1, var2, p;
+	uint8_t pressr[3];
+	bmp280_readreg(BMP280_PRESS_MSB, pressr,3);
+	int32_t adc_P = (int32_t) ((((int32_t) (pressr[0])) << 12) | (((int32_t) (pressr[1])) << 4) | (((int32_t) (pressr[2])) >> 4));
 	var1 = ((int64_t)t_fine) - 128000;
 	var2 = var1 * var1 * (int64_t)dig_P6;
 	var2 = var2 + ((var1 * (int64_t)dig_P5) << 17);
@@ -107,7 +114,7 @@ uint32_t bmp280_press64_compensate(int32_t adc_P){
 }
 
 uint32_t bmp280_altitude(uint32_t press){
-	uint32_t alt = 44330 * (1.0 - pow(press / 1013, 0.1903)); //1013 cisnienie na poziomie morza
+	float alt = 44330 * (1.0 - pow((float)press / 1013.25, 0.1903)); //1013 cisnienie na poziomie morza
 	return alt;
 }
 
@@ -117,13 +124,15 @@ uint8_t SPI_transfer(uint8_t data) {
 	return SPDR0;
 }
 
-int bmp280_readreg(int reg){
-	int8_t val;
+void bmp280_readreg(uint8_t reg, void *reg_data, uint8_t len){
 	PORTB &= ~(1 << SS0);
 	SPI_transfer(reg | 0x80);
-	val = SPI_transfer(0x00);
+		while(len--)
+		{
+			*(uint8_t*)reg_data=SPI_transfer(0x00);
+			(uint8_t*)reg_data++;
+		}
 	PORTB |= (1 << SS0);
-	return val;
 }
 
 void bmp280_writereg(uint8_t reg, uint8_t value) {
@@ -149,32 +158,32 @@ void bmp280_init(void) {
 }
 
 void bmp280_readcalibs(void){
-	dig_T1 = bmp280_readreg(0x88) | (bmp280_readreg(0x89) << 8);
-	dig_T2 = bmp280_readreg(0x8a) | (bmp280_readreg(0x8b) << 8);
-	dig_T3 = bmp280_readreg(0x8c) | (bmp280_readreg(0x8d) << 8);
-
-	dig_P1 = bmp280_readreg(0x8e) | (bmp280_readreg(0x8f) << 8);
-	dig_P2 = bmp280_readreg(0x90) | (bmp280_readreg(0x91) << 8);
-	dig_P3 = bmp280_readreg(0x92) | (bmp280_readreg(0x93) << 8);
-	dig_P4 = bmp280_readreg(0x94) | (bmp280_readreg(0x95) << 8);
-	dig_P5 = bmp280_readreg(0x96) | (bmp280_readreg(0x97) << 8);
-	dig_P6 = bmp280_readreg(0x98) | (bmp280_readreg(0x99) << 8);
-	dig_P7 = bmp280_readreg(0x9a) | (bmp280_readreg(0x9b) << 8);
-	dig_P8 = bmp280_readreg(0x9c) | (bmp280_readreg(0x9d) << 8);
-	dig_P9 = bmp280_readreg(0x9e) | (bmp280_readreg(0x9f) << 8);
+	bmp280_readreg(0x88, &dig_T1, sizeof(dig_T1));
+	bmp280_readreg(0x8a, &dig_T2, sizeof(dig_T2));
+	bmp280_readreg(0x8c, &dig_T3, sizeof(dig_T3));
+	
+	bmp280_readreg(0x8e, &dig_P1, sizeof(dig_P1));
+	bmp280_readreg(0x90, &dig_P2, sizeof(dig_P2));
+	bmp280_readreg(0x92, &dig_P3, sizeof(dig_P3));
+	bmp280_readreg(0x94, &dig_P4, sizeof(dig_P4));
+	bmp280_readreg(0x96, &dig_P5, sizeof(dig_P5));
+	bmp280_readreg(0x98, &dig_P6, sizeof(dig_P6));
+	bmp280_readreg(0x9a, &dig_P7, sizeof(dig_P7));
+	bmp280_readreg(0x9c, &dig_P8, sizeof(dig_P8));
+	bmp280_readreg(0x9e, &dig_P9, sizeof(dig_P9));
 }
 
 void read_pressure_and_temperature(volatile int32_t* pressure,volatile int32_t* temperature) {
 	uint8_t msb, lsb, xlsb;
 
-	msb = bmp280_readreg(BMP280_TEMP_MSB);
-	lsb = bmp280_readreg(BMP280_TEMP_LSB);
-	xlsb = bmp280_readreg(BMP280_TEMP_XLSB);
+	bmp280_readreg(BMP280_TEMP_MSB, &msb, sizeof(msb));
+	bmp280_readreg(BMP280_TEMP_LSB, &lsb, sizeof(lsb));
+	bmp280_readreg(BMP280_TEMP_XLSB, &xlsb, sizeof(xlsb));
 	*temperature = (msb << 12) | (lsb << 4) | (xlsb >> 4);
 
-	msb = bmp280_readreg(BMP280_PRESS_MSB);
-	lsb = bmp280_readreg(BMP280_PRESS_LSB);
-	xlsb = bmp280_readreg(BMP280_PRESS_XLSB);
+	bmp280_readreg(BMP280_PRESS_MSB, &msb, sizeof(msb));
+	bmp280_readreg(BMP280_PRESS_LSB, &lsb, sizeof(lsb));
+	bmp280_readreg(BMP280_PRESS_XLSB, &xlsb, sizeof(xlsb));
 	*pressure = (msb << 12) | (lsb << 4) | (xlsb >> 4);
 }
 
@@ -203,5 +212,3 @@ int main(void) {
 		display(pointarr);
 	}
 }
-
-
