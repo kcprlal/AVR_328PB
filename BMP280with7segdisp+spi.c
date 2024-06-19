@@ -1,13 +1,16 @@
+//po wcisnieciu pb7 zmiana wyswietlanego parametru
+//jezeli na swieci sie dioda 6 - temperatura, 5 - cisnienie, 4 - wysokosc
+//kiedy wartosc jest ujemna swieci sie dioda 1
 #include <avr/io.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #define F_CPU 8000000UL
 #include <util/delay.h>
 
-#define MOSI 3
-#define SS0 2
-#define MISO 4
-#define CLOCK 5
+#define SS0 2 //csb
+#define MOSI 3 //sda
+#define MISO 4 //sd0
+#define CLOCK 5 //csl
 
 #define BMP280_PRESS_MSB  ((uint8_t)0xf7)
 #define BMP280_PRESS_LSB  ((uint8_t)0xf8)
@@ -19,7 +22,7 @@
 uint16_t dig_T1, dig_P1;
 int16_t dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
 int32_t t_fine;
-
+bool minus = false;
 void display(unsigned char* pointarr[]){
 	unsigned char disp[4] = {0b0111, 0b1011, 0b1101, 0b1110};
 	volatile unsigned int i, wait1, wait2;
@@ -33,28 +36,49 @@ void display(unsigned char* pointarr[]){
 	}
 }
 
-void counter(unsigned char* pointarr[], unsigned char arr[], volatile unsigned int value){
+void counter(unsigned char* pointarr[], unsigned char arr[], volatile int32_t value){
+	if(value<0) {
+		minus=true;
+		value*=-1; 	
+		}
+	else minus = false;
 	pointarr[3] = &arr[value / 1000];
 	pointarr[2] = &arr[(value / 100) % 10];
 	pointarr[1] = &arr[(value / 10) % 10];
 	pointarr[0] = &arr[value % 10];
 }
 
-void change(unsigned char* pointarr[], unsigned char arr[], volatile unsigned int press, volatile unsigned int temp){
-	static bool was_press;
-	if (!(PINB & (1 << PB7))) {
-		_delay_ms(50);
-		if (!(PINB & (1 << PB7)) && !was_press)
-		counter(pointarr, arr, press);
-		else
-		counter(pointarr, arr, temp);
-		was_press = true;
-		} else {
-		was_press = false;
-	}
+void change(unsigned char* pointarr[], unsigned char arr[], volatile uint32_t press, volatile int32_t temp, volatile int32_t alt){
+	 static bool was_press = false;
+	 static uint8_t state = 0;
+
+	 if (!(PINB & (1 << 7))) {
+		 _delay_ms(50);
+		 if (!(PINB & (1 << 7)) && !was_press) {
+			 state = (state + 1) % 3;
+			 was_press = true;
+		 }
+		 } else {
+		 was_press = false;
+	 }
+
+	 switch (state) {
+		 case 0:
+		 counter(pointarr, arr, press);
+		 PORTE = 0b001;
+		 break;
+		 case 1:
+		 counter(pointarr, arr, temp);
+		 PORTE = 0b010;
+		 break;
+		 case 2:
+		 counter(pointarr, arr, alt);
+		 PORTE = 0b100;
+		 break;
+	 }
 }
 
-static int32_t bmp280_temp32_compensate(int32_t adc_T){
+int32_t bmp280_temp32_compensate(int32_t adc_T){
 	int32_t var1, var2, T;
 	var1 = ((((adc_T >> 3) - ((int32_t)dig_T1 << 1))) * ((int32_t)dig_T2)) >> 11;
 	var2 = (((((adc_T >> 4) - ((int32_t)dig_T1)) * ((adc_T >> 4) - ((int32_t)dig_T1))) >> 12) * ((int32_t)dig_T3)) >> 14;
@@ -63,7 +87,7 @@ static int32_t bmp280_temp32_compensate(int32_t adc_T){
 	return T;
 }
 
-static uint32_t bmp280_press64_compensate(int32_t adc_P){
+uint32_t bmp280_press64_compensate(int32_t adc_P){
 	int64_t var1, var2, p;
 	var1 = ((int64_t)t_fine) - 128000;
 	var2 = var1 * var1 * (int64_t)dig_P6;
@@ -82,6 +106,11 @@ static uint32_t bmp280_press64_compensate(int32_t adc_P){
 	return (uint32_t)p/25600;
 }
 
+uint32_t bmp280_altitude(uint32_t press){
+	uint32_t alt = 44330 * (1.0 - pow(press / 1013, 0.1903)); //1013 cisnienie na poziomie morza
+	return alt;
+}
+
 uint8_t SPI_transfer(uint8_t data) {
 	SPDR0 = data;
 	while (!(SPSR0 & (1 << SPIF)));
@@ -98,13 +127,13 @@ int bmp280_readreg(int reg){
 }
 
 void bmp280_writereg(uint8_t reg, uint8_t value) {
-    PORTB &= ~(1 << SS0); 
-    SPI_transfer(reg & ~0x80); 
-    SPI_transfer(value); 
-    PORTB |= (1 << SS0); 
+	PORTB &= ~(1 << SS0);
+	SPI_transfer(reg & ~0x80);
+	SPI_transfer(value);
+	PORTB |= (1 << SS0);
 }
 
-void SPI_Init(void) {
+void SPI_init(void) {
 	DDRB &= ~(1 << MISO);
 	DDRB |= (1 << MOSI) | (1 << CLOCK) | (1 << SS0);
 	SPCR0 = (1 << SPE) | (1 << MSTR) | (1 << SPR0);
@@ -115,8 +144,8 @@ void SPI_Init(void) {
 }
 
 void bmp280_init(void) {
-    bmp280_writereg(0xF4, 0b10110111); 
-    _delay_ms(100); 
+	bmp280_writereg(0xF4, 0b10110111);
+	_delay_ms(100);
 }
 
 void bmp280_readcalibs(void){
@@ -153,21 +182,26 @@ int main(void) {
 	unsigned char arr[11] = {0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x70, 0x7F, 0x7B, 0};
 	unsigned char* pointarr[4] = {arr, arr, arr, arr};
 	CLKPR |=(1<<CLKPS0);
-	SPI_Init();
-	bmp280_init();
-	bmp280_readcalibs();
 	DDRD = 0xff;
 	DDRC = 0xff;
+	DDRE = 0xff;
 	DDRB &= ~(1 << 7);
 	PORTB |= (1 << 7);
-	PORTB &= ~(1 << 2);
+	SPI_init();
+	bmp280_init();
+	bmp280_readcalibs();
 	volatile int32_t adc_T = 0;
 	volatile int32_t adc_P = 0;
 	while (1) {
 		read_pressure_and_temperature(&adc_P, &adc_T);
 		volatile uint32_t press = bmp280_press64_compensate(adc_P);
 		volatile int32_t temp = bmp280_temp32_compensate(adc_T);
-		change(pointarr, arr, press, temp);
+		volatile int32_t alt = bmp280_altitude(press);
+		change(pointarr, arr, press, temp, alt);
+		if(minus) PORTE |=(1<<3);
+		else PORTE &=~(1<<3);
 		display(pointarr);
 	}
 }
+
+
